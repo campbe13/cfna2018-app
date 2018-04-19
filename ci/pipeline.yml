@@ -44,6 +44,7 @@ groups:
   - name: (( grab meta.pipeline ))
     jobs:
       - test
+      - prtests
       - rc
       - shipit
 
@@ -70,6 +71,41 @@ jobs:
               args: []
             params:
               MODULE: (( grab meta.go.module ))
+
+  - name: prtests
+    plan:
+      - get: git-pull-requests
+        trigger: true
+        version: every
+        params:
+          path: git-pull-requests
+          status: pending
+      - task: test
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: (( grab meta.image.name ))
+              tag:        (( grab meta.image.tag ))
+          inputs:
+            - name: git-pull-requests
+              path: code
+          run:
+            path: ./code/ci/scripts/test
+            args: []
+          params:
+            MODULE: (( grab meta.go.module ))
+        on_success:
+          put: git-pull-requests
+          params:
+            path: git-pull-requests
+            status: success
+        on_failure:
+          put: git-pull-requests
+          params:
+            path: git-pull-requests
+            status: failure
 
   - name: rc
     public: true
@@ -126,6 +162,13 @@ jobs:
             body:   gh/notes.md
             globs: [gh/artifacts/*]
 
+resource_types:
+  - name: pull-request
+    type: docker-image
+    source:
+      repository: jtarchie/pr
+
+
 resources:
   - name: git
     type: git
@@ -139,3 +182,11 @@ resources:
       user:         (( grab meta.github.owner ))
       repository:   (( grab meta.github.repo ))
       access_token: (( grab meta.github.access_token ))
+
+      
+  - name: git-pull-requests
+    type: pull-request
+    source:
+      repo: (( concat meta.github.owner "/" meta.github.repo ))
+      access_token: (( grab meta.github.access_token ))
+
